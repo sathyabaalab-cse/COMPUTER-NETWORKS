@@ -1,0 +1,258 @@
+#include <stdio.h>
+#include <math.h>
+#include <string.h>
+#include <stdlib.h>
+
+void printHorizontalTable(int ham[], int total_len) {
+    int i, k;
+    printf("| Position   |");
+    for(i = 1; i <= total_len; i++) printf(" %2d  |", i);
+    printf("\n|------------|");
+    for(i = 1; i <= total_len; i++) printf("-----|");
+    printf("\n| Bit Type   |");
+    k = 1; int dataCount = 1;
+    for(i = 1; i <= total_len; i++) {
+        if(i == (int)pow(2, k - 1)) {
+            printf(" P%-2d |", (int)pow(2, k - 1));
+            k++;
+        } else {
+            printf(" D%-2d |", dataCount);
+            dataCount++;
+        }
+    }
+    printf("\n|------------|");
+    for(i = 1; i <= total_len; i++) printf("-----|");
+    printf("\n| Value      |");
+    for(i = 1; i <= total_len; i++) {
+        if(ham[i] == -1) printf("  P  |");
+        else printf("  %d  |", ham[i]);
+    }
+    printf("\n");
+}
+
+void generateHamming(int data[], int ham[], int m, int *n, int r) {
+    int i, j, k = 1, p, count;
+    *n = m + r;
+
+    int temp_m = m;
+    for(i = 1; i <= *n; i++) {
+        if(i == (int)pow(2, k - 1)) {
+            ham[i] = -1; 
+            k++;
+        } else {
+            ham[i] = data[temp_m];
+            temp_m--;
+        }
+    }
+
+    printf("========================================================================================\n");
+    printf("                        HAMMING CODE STRUCTURE (BEFORE PARITY BITS)                     \n");
+    printf("========================================================================================\n");
+    printHorizontalTable(ham, *n);
+    printf("========================================================================================\n\n");
+
+    printf("--- PARITY BIT XOR CALCULATIONS ---\n");
+    for(i = 0; i < r; i++) {
+        p = (int)pow(2, i);
+        count = 0;
+        printf("P%d at Pos %d -> XOR of bits at positions: ", p, p);
+        for(j = 1; j <= *n; j++) {
+            if((j & p) && (j != p)) {
+                printf("%d ", j);
+                if(ham[j] != -1) count += ham[j];
+            }
+        }
+        ham[p] = count % 2;
+        printf("| Result parity bit = %d\n", ham[p]);
+    }
+}
+
+int main() {
+    int data[30], ham[60];
+    int m = 16, n, r = 0, i;
+    FILE *fp;
+    char content[50] = {0};
+
+    fp = fopen("message.txt", "r");
+    if (fp == NULL) {
+        printf("Error: message.txt file not found!\n");
+        return 1;
+    }
+    fgets(content, sizeof(content), fp);
+    fclose(fp);
+    content[strcspn(content, "\n")] = 0;
+
+    printf("==========================================\n");
+    printf("       MESSAGE INSIDE message.txt\n");
+    printf("==========================================\n");
+    printf("Text Content: %s\n", content);
+    printf("==========================================\n\n");
+
+    int bIdx = 1; 
+    for (i = 0; i < 2 && content[i] != '\0'; i++) {
+        unsigned char ch = content[i];
+        for (int j = 7; j >= 0; j--) {
+            data[bIdx++] = ((ch >> j) & 1);
+        }
+    }
+    while (bIdx <= 16) data[bIdx++] = 0;
+
+    printf("Input Binary (m = 16 bits): ");
+    for(i = 1; i <= m; i++) printf("%d", data[i]);
+    printf("\n\n");
+
+    // Automatically calculate valid r value to prevent -1 and -3 bugs
+    while(pow(2, r) < m + r + 1) {
+        r++;
+    }
+    printf("Calculated Parity Bits Required (r) = %d\n\n", r);
+
+    generateHamming(data, ham, m, &n, r);
+
+    printf("\n========================================================================================\n");
+    printf("                        FINAL HAMMING CODE STRUCTURE (AFTER PARITY BITS)                \n");
+    printf("========================================================================================\n");
+    printHorizontalTable(ham, n);
+    printf("========================================================================================\n\n");
+
+    printf("Final Hamming Code Stream: ");
+    for(i = 1; i <= n; i++) printf("%d", ham[i]);
+    printf("\n\n");
+
+    fp = fopen("sender.txt", "w");
+    for(i = 1; i <= n; i++) fprintf(fp, "%d", ham[i]);
+    fclose(fp);
+    printf("Written to 'sender.txt' successfully.\n");
+
+    return 0;
+}
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <math.h>
+
+void printDynamicBinary(int num, int r) {
+    for (int i = r - 1; i >= 0; i--) printf("%d", (num >> i) & 1);
+}
+
+void printHorizontalTable(int ham[], int total_len) {
+    int i, k;
+    printf("| Position   |");
+    for(i = 1; i <= total_len; i++) printf(" %2d  |", i);
+    printf("\n|------------|");
+    for(i = 1; i <= total_len; i++) printf("-----|");
+    printf("\n| Bit Type   |");
+    k = 1; int dataCount = 1;
+    for(i = 1; i <= total_len; i++) {
+        if(i == (int)pow(2, k - 1)) {
+            printf(" P%-2d |", (int)pow(2, k - 1));
+            k++;
+        } else {
+            printf(" D%-2d |", dataCount);
+            dataCount++;
+        }
+    }
+    printf("\n|------------|");
+    for(i = 1; i <= total_len; i++) printf("-----|");
+    printf("\n| Value      |");
+    for(i = 1; i <= total_len; i++) printf("  %d  |", ham[i]);
+    printf("\n");
+}
+
+void hammingReceiver(int ham[], int total_len, int r) {
+    int i, k, syndrome = 0, first_bit = 1;
+    printf("\n--- PERFORMING XOR ON BIT POSITIONS WITH '1' ---\n");
+
+    for (i = 1; i <= total_len; i++) {
+        if (ham[i] == 1) {
+            if (first_bit) {
+                syndrome = i;
+                printf("Bit %2d -> Initial Stream: ", i);
+                printDynamicBinary(syndrome, r);
+                printf(" (Decimal: %d)\n", syndrome);
+                first_bit = 0;
+            } else {
+                printf("Bit %2d -> XOR ", i);
+                printDynamicBinary(i, r);
+                syndrome ^= i;
+                printf(" = New Stream: ");
+                printDynamicBinary(syndrome, r);
+                printf(" (Decimal: %d)\n", syndrome);
+            }
+        }
+    }
+    printf("--------------------------------------------------\n");
+    printf("FINAL RESULT:\nBinary Stream (Syndrome) : ");
+    printDynamicBinary(syndrome, r);
+    printf("\n\n");
+
+    if (syndrome != 0 && syndrome <= total_len) {
+        printf("Syndrome != 0 -> Display: Error Detected!\n");
+        printf("Decimal Value of Erroneous Bit Position: %d\n\n", syndrome);
+        ham[syndrome] = (ham[syndrome] == 1) ? 0 : 1;
+        printf("Display: \"Error Corrected\"\n\n");
+        
+        printf("========================================================================================\n");
+        printf("                             CORRECTED HAMMING CODE TABLE STRUCTURE                     \n");
+        printf("========================================================================================\n");
+        printHorizontalTable(ham, total_len);
+        printf("========================================================================================\n\n");
+    } else if (syndrome > total_len) {
+        printf("Syndrome calculation out of bounds (%d). Multiple transmission errors likely.\n", syndrome);
+    } else {
+        printf("Syndrome == 0 -> Display: Code Clean (No Error Detected)!\n\n");
+    }
+
+    printf("Displaying Original Data: ");
+    k = 1;
+    for (i = 1; i <= total_len; i++) {
+        if (i == (int)pow(2, k - 1)) k++;
+        else printf("%d", ham[i]);
+    }
+    printf("\n");
+}
+
+int main() {
+    FILE *fp = fopen("sender.txt", "r");
+    if (!fp) {
+        printf("Error: Cannot open sender.txt\n");
+        return 1;
+    }
+    char received_str[100] = {0};
+    fscanf(fp, "%s", received_str);
+    fclose(fp);
+
+    int total_len = strlen(received_str);
+    int ham[100];
+    int i, r;
+    
+    for (i = 1; i <= total_len; i++) ham[i] = received_str[i - 1] - '0';
+
+    printf("Received code from file: %s\n", received_str);
+    
+    // Automatically find 'r' matching length to avoid mismatches
+    r = 0;
+    while ((total_len - r) + r != total_len || pow(2, r) < total_len + 1) r++;
+    printf("Detected Parity Bits Implied (r): %d\n", r);
+
+    int choice, error_pos = 0;
+    printf("Do you want to inject a transmission error? (1 = Yes, 0 = No): ");
+    if (scanf("%d", &choice) != 1) return 1;
+
+    if (choice == 1) {
+        printf("Enter bit position to corrupt/flip (1 to %d): ", total_len);
+        if (scanf("%d", &error_pos) != 1) return 1;
+
+        if (error_pos >= 1 && error_pos <= total_len) {
+            ham[error_pos] = (ham[error_pos] == 1) ? 0 : 1;
+            printf("\n========================================================================================\n");
+            printf("                             CORRUPTED RECEIVED CODE STRUCTURE                          \n");
+            printf("========================================================================================\n");
+            printHorizontalTable(ham, total_len);
+            printf("========================================================================================\n");
+        }
+    }
+
+    hammingReceiver(ham, total_len, r);
+    return 0;
+}
