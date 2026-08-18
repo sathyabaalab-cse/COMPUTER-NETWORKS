@@ -1,0 +1,324 @@
+#include <iostream>
+#include <vector>
+#include <cctype>
+
+using namespace std;
+
+#define INF 99999
+#define MAX_ROUTERS 26
+int activeRouters[MAX_ROUTERS] = {0};
+
+int charToIndex(char c)
+{
+    return toupper(c) - 'A';
+}
+char indexToChar(int index)
+{
+    return index + 'A';
+}
+
+void printPathSequence(int destination,
+                       const vector<int>& previous,
+                       int source)
+{
+    if(destination == source)
+    {
+        cout << indexToChar(source);
+        return;
+    }
+
+    if(previous[destination] == -1)
+    {
+        cout << "-";
+        return;
+    }
+
+    printPathSequence(previous[destination],
+                      previous,
+                      source);
+
+    cout << " -> "
+         << indexToChar(destination);
+}
+struct List
+{
+    int router[MAX_ROUTERS];
+    int size;
+
+    List()
+    {
+        size = 0;
+    }
+
+    // Insert Router
+    void insert(int value)
+    {
+        if(size < MAX_ROUTERS)
+        {
+            router[size] = value;
+            size++;
+        }
+    }
+
+    // Remove First Router
+    int removeFront()
+    {
+        if(size == 0)
+            return -1;
+
+        int value = router[0];
+
+        for(int i=0;i<size-1;i++)
+        {
+            router[i]=router[i+1];
+        }
+
+        size--;
+
+        return value;
+    }
+
+    // Check Empty
+    bool isEmpty()
+    {
+        return size==0;
+    }
+
+    // Display Current List (For Intermediate Step)
+    void display()
+    {
+        cout<<"List : ";
+
+        if(size==0)
+        {
+            cout<<"Empty";
+        }
+        else
+        {
+            for(int i=0;i<size;i++)
+            {
+                cout<<indexToChar(router[i])<<" ";
+            }
+        }
+        cout<<endl;
+    }
+};
+void bellmanFordList(int V,
+                     int E,
+                     const vector<vector<int>> &edges,
+                     int source)
+{
+    vector<int> dist(MAX_ROUTERS, INF);
+    vector<int> prev(MAX_ROUTERS, -1);
+    vector<bool> inList(MAX_ROUTERS, false);
+    vector<int> relaxCount(MAX_ROUTERS, 0);
+
+    List routerList;
+
+    dist[source] = 0;
+    routerList.insert(source);
+    inList[source] = true;
+
+    cout << "\n==========================================================";
+    cout << "\nSOURCE ROUTER : " << indexToChar(source);
+    cout << "\n==========================================================";
+    cout << "\n==========================================================";
+
+    cout << "\nINITIAL ROUTING TABLE\n";
+    cout << "----------------------------------------------------------\n";
+    cout << "Router\tCost\n";
+    cout << "----------------------------------------------------------\n";
+
+    for(int i = 0; i < MAX_ROUTERS; i++)
+    {
+        if(activeRouters[i])
+        {
+            cout << indexToChar(i) << "\t";
+
+            if(i == source)
+                cout << "0";
+            else
+                cout << "INF";
+
+            cout << endl;
+        }
+    }
+
+    cout << "----------------------------------------------------------\n";
+
+    int step = 1;
+
+    while(!routerList.isEmpty())
+    {
+        cout << "\n\n---------------- STEP " << step << " ----------------\n";
+
+        cout << "Current ";
+        routerList.display();
+
+        int u = routerList.removeFront();
+
+        cout << "Processing Router : "
+             << indexToChar(u) << endl;
+
+        inList[u] = false;
+        relaxCount[u]++;
+
+        // Negative Cycle Detection
+        if(relaxCount[u] > V)
+        {
+            cout << "\n*********************************************";
+            cout << "\n NEGATIVE WEIGHT CYCLE DETECTED";
+            cout << "\n*********************************************";
+            return;
+        }
+
+        bool updated = false;
+
+        for(int i=0;i<E;i++)
+        {
+            int from = edges[i][0];
+            int to = edges[i][1];
+            int cost = edges[i][2];
+
+            if(from == u)
+            {
+                if(dist[from] != INF &&
+                   dist[to] > dist[from] + cost)
+                {
+                    dist[to] = dist[from] + cost;
+                    prev[to] = from;
+                    updated = true;
+
+                    if(!inList[to])
+                    {
+                        routerList.insert(to);
+                        inList[to] = true;
+                    }
+                }
+            }
+        }
+
+        if(updated)
+        {
+            cout << "\nUpdated Routing Cost Table\n\n";
+
+            cout << "Router\tCost\n";
+
+            for(int i=0;i<MAX_ROUTERS;i++)
+            {
+                if(activeRouters[i])
+                {
+                    cout << indexToChar(i) << "\t";
+
+                    if(dist[i]==INF)
+                        cout << "INF";
+                    else
+                        cout << dist[i];
+
+                    cout << endl;
+                }
+            }
+        }
+
+        step++;
+    }
+
+    cout << "\n\n";
+    cout << "==============================================================\n";
+    cout << "                 FINAL ROUTING TABLE\n";
+    cout << "==============================================================\n";
+
+    cout << "--------------------------------------------------------------\n";
+    cout << "Destination\tCost\tShortest Path\n";
+    cout << "--------------------------------------------------------------\n";
+
+    for(int i=0;i<MAX_ROUTERS;i++)
+    {
+        if(activeRouters[i])
+        {
+            cout << indexToChar(i) << "\t\t";
+
+            if(i==source)
+            {
+                cout << "0\t";
+                cout << "Source Router";
+            }
+            else if(dist[i]==INF)
+            {
+                cout << "INF\t";
+                cout << "-";
+            }
+            else
+            {
+                cout << dist[i] << "\t";
+                printPathSequence(i, prev, source);
+            }
+
+            cout << endl;
+        }
+    }
+
+    cout << "--------------------------------------------------------------\n";
+}
+int main()
+{
+    int V, E;
+
+    cout << "=================================================\n";
+    cout << "      ROUTING USING SPFA (USER DEFINED LIST)\n";
+    cout << "=================================================\n";
+
+    cout << "\nEnter the number of routers: ";
+    cin >> V;
+
+    cout << "Enter the number of links: ";
+    cin >> E;
+
+    // Store both forward and reverse links
+    vector<vector<int>> edges(2 * E, vector<int>(3));
+
+    cout << "\nEnter the Link Details";
+    cout << "\n(Source Router  Destination Router  Cost)\n\n";
+
+    for(int i = 0; i < E; i++)
+    {
+        char src, dest;
+        int cost;
+
+        cout << "Link " << i + 1 << ": ";
+        cin >> src >> dest >> cost;
+
+        int u = charToIndex(src);
+        int v = charToIndex(dest);
+
+        // Forward Edge
+        edges[2 * i][0] = u;
+        edges[2 * i][1] = v;
+        edges[2 * i][2] = cost;
+
+        // Reverse Edge
+        edges[2 * i + 1][0] = v;
+        edges[2 * i + 1][1] = u;
+        edges[2 * i + 1][2] = cost;
+
+        activeRouters[u] = 1;
+        activeRouters[v] = 1;
+    }
+
+    cout << "\n=================================================";
+    cout << "\n           ROUTING TABLE FOR ALL ROUTERS";
+    cout << "\n=================================================\n";
+
+    // Generate routing table for every router
+    for(int i = 0; i < MAX_ROUTERS; i++)
+    {
+        if(activeRouters[i])
+        {
+            bellmanFordList(V, 2 * E, edges, i);
+            cout << endl;
+        }
+    }
+
+
+    return 0;
+}
