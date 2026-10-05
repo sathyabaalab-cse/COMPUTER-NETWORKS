@@ -1,0 +1,178 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <winsock2.h>
+
+#pragma comment(lib, "ws2_32.lib")
+
+#define PORT 5000
+#define BUFFER_SIZE 1024
+
+int main()
+{
+    WSADATA wsa;
+    SOCKET serverSocket;
+
+    struct sockaddr_in serverAddr;
+    struct sockaddr_in clientAddr;
+
+    int clientLen;
+    int bytes;
+
+    char buffer[BUFFER_SIZE];
+    char result[BUFFER_SIZE];
+
+    double num1, num2, answer;
+    char operation;
+
+    /* Initialize Winsock */
+    if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0)
+    {
+        printf("WSAStartup failed\n");
+        return 1;
+    }
+
+    /* Create UDP socket */
+    serverSocket = socket(AF_INET, SOCK_DGRAM, 0);
+
+    if (serverSocket == INVALID_SOCKET)
+    {
+        printf("Socket creation failed\n");
+        WSACleanup();
+        return 1;
+    }
+
+    /* Configure server address */
+    serverAddr.sin_family = AF_INET;
+    serverAddr.sin_addr.s_addr = INADDR_ANY;
+    serverAddr.sin_port = htons(PORT);
+
+    /* Bind socket */
+    if (bind(serverSocket,
+             (struct sockaddr *)&serverAddr,
+             sizeof(serverAddr)) == SOCKET_ERROR)
+    {
+        printf("Bind failed\n");
+        closesocket(serverSocket);
+        WSACleanup();
+        return 1;
+    }
+
+    printf("UDP Arithmetic Server started...\n");
+    printf("Waiting for client requests on port %d...\n", PORT);
+
+    while (1)
+    {
+        clientLen = sizeof(clientAddr);
+
+        /* Receive request */
+        bytes = recvfrom(serverSocket,
+                         buffer,
+                         BUFFER_SIZE - 1,
+                         0,
+                         (struct sockaddr *)&clientAddr,
+                         &clientLen);
+
+        if (bytes == SOCKET_ERROR)
+        {
+            printf("Receive failed\n");
+            continue;
+        }
+
+        buffer[bytes] = '\0';
+
+        /*
+           Request format:
+           number1 operation number2
+
+           Example:
+           10 + 20
+        */
+
+        if (sscanf(buffer, "%lf %c %lf",
+                   &num1,
+                   &operation,
+                   &num2) != 3)
+        {
+            strcpy(result, "ERROR: Invalid input format");
+        }
+        else
+        {
+            switch (operation)
+            {
+                case '+':
+
+                    answer = num1 + num2;
+
+                    sprintf(result,
+                            "Result = %.2lf",
+                            answer);
+
+                    break;
+
+                case '-':
+
+                    answer = num1 - num2;
+
+                    sprintf(result,
+                            "Result = %.2lf",
+                            answer);
+
+                    break;
+
+                case '*':
+
+                    answer = num1 * num2;
+
+                    sprintf(result,
+                            "Result = %.2lf",
+                            answer);
+
+                    break;
+
+                case '/':
+
+                    /* Division by zero validation */
+
+                    if (num2 == 0)
+                    {
+                        strcpy(result,
+                               "ERROR: Division by zero is not allowed");
+                    }
+                    else
+                    {
+                        answer = num1 / num2;
+
+                        sprintf(result,
+                                "Result = %.2lf",
+                                answer);
+                    }
+
+                    break;
+
+                default:
+
+                    strcpy(result,
+                           "ERROR: Invalid operator. Use +, -, *, /");
+            }
+        }
+
+        /* Display request */
+        printf("\nClient request: %s\n", buffer);
+
+        /* Send result */
+        sendto(serverSocket,
+               result,
+               strlen(result),
+               0,
+               (struct sockaddr *)&clientAddr,
+               clientLen);
+
+        printf("Sent: %s\n", result);
+    }
+
+    closesocket(serverSocket);
+    WSACleanup();
+
+    return 0;
+}
