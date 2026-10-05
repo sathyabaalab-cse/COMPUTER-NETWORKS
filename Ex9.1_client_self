@@ -1,0 +1,254 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <winsock2.h>
+
+#pragma comment(lib, "ws2_32.lib")
+
+#define SERVER_PORT 5000
+#define MAX 1024
+#define TIMEOUT 3
+#define MAX_RETRIES 3
+
+/* ---------------- Send Request ---------------- */
+
+void sendRequest(SOCKET clientSocket,
+                 struct sockaddr_in *serverAddr,
+                 char *request)
+{
+    char buffer[MAX];
+
+    int serverLen;
+    int bytes;
+    int retry;
+
+    /*
+       Set timeout for recvfrom()
+       Timeout = 3 seconds
+    */
+
+    setsockopt(clientSocket,
+               SOL_SOCKET,
+               SO_RCVTIMEO,
+               (char *)&(int){TIMEOUT * 1000},
+               sizeof(int));
+
+    for (retry = 1; retry <= MAX_RETRIES; retry++)
+    {
+        printf("\nSending request... Attempt %d\n",
+               retry);
+
+        /* Send request */
+
+        sendto(clientSocket,
+               request,
+               strlen(request),
+               0,
+               (struct sockaddr *)serverAddr,
+               sizeof(*serverAddr));
+
+        /*
+           Wait for ACK
+        */
+
+        serverLen = sizeof(*serverAddr);
+
+        bytes = recvfrom(clientSocket,
+                         buffer,
+                         MAX - 1,
+                         0,
+                         (struct sockaddr *)serverAddr,
+                         &serverLen);
+
+        if (bytes == SOCKET_ERROR)
+        {
+            printf("Timeout! Retransmitting...\n");
+            continue;
+        }
+
+        buffer[bytes] = '\0';
+
+        /*
+           Check ACK
+        */
+
+        if (strcmp(buffer, "ACK") == 0)
+        {
+            printf("ACK received.\n");
+
+            /*
+               Wait for actual response.
+            */
+
+            bytes = recvfrom(clientSocket,
+                             buffer,
+                             MAX - 1,
+                             0,
+                             (struct sockaddr *)serverAddr,
+                             &serverLen);
+
+            if (bytes == SOCKET_ERROR)
+            {
+                printf("Response lost. Retransmitting...\n");
+                continue;
+            }
+
+            buffer[bytes] = '\0';
+
+            printf("\nServer Response:\n%s\n",
+                   buffer);
+
+            return;
+        }
+    }
+
+    printf("\nERROR: Request failed after %d attempts.\n",
+           MAX_RETRIES);
+}
+
+/* ---------------- Main Client ---------------- */
+
+int main()
+{
+    WSADATA wsa;
+    SOCKET clientSocket;
+
+    struct sockaddr_in serverAddr;
+
+    int choice;
+    int bookId;
+
+    char keyword[100];
+
+    char request[MAX];
+
+    int requestId = 1000;
+
+    /*
+       Initialize Winsock
+    */
+
+    if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0)
+    {
+        printf("WSAStartup failed\n");
+        return 1;
+    }
+
+    /*
+       Create UDP socket
+    */
+
+    clientSocket = socket(AF_INET,
+                          SOCK_DGRAM,
+                          0);
+
+    if (clientSocket == INVALID_SOCKET)
+    {
+        printf("Socket creation failed\n");
+
+        WSACleanup();
+
+        return 1;
+    }
+
+    /*
+       Configure server address
+    */
+
+    serverAddr.sin_family = AF_INET;
+    serverAddr.sin_port = htons(SERVER_PORT);
+
+    serverAddr.sin_addr.s_addr =
+        inet_addr("127.0.0.1");
+
+    while (1)
+    {
+        printf("\n=================================\n");
+        printf("     LIBRARY MANAGEMENT SYSTEM\n");
+        printf("=================================\n");
+
+        printf("1. Search Book\n");
+        printf("2. Issue Book\n");
+        printf("3. Return Book\n");
+        printf("4. View Available Books\n");
+        printf("5. Exit\n");
+
+        printf("\nEnter your choice: ");
+        scanf("%d", &choice);
+
+        if (choice == 1)
+        {
+            printf("Enter book title/keyword: ");
+
+            scanf(" %[^\n]",
+                  keyword);
+
+            sprintf(request,
+                    "%d|SEARCH|%s",
+                    requestId++,
+                    keyword);
+
+            sendRequest(clientSocket,
+                        &serverAddr,
+                        request);
+        }
+
+        else if (choice == 2)
+        {
+            printf("Enter Book ID: ");
+            scanf("%d", &bookId);
+
+            sprintf(request,
+                    "%d|ISSUE|%d",
+                    requestId++,
+                    bookId);
+
+            sendRequest(clientSocket,
+                        &serverAddr,
+                        request);
+        }
+
+        else if (choice == 3)
+        {
+            printf("Enter Book ID: ");
+            scanf("%d", &bookId);
+
+            sprintf(request,
+                    "%d|RETURN|%d",
+                    requestId++,
+                    bookId);
+
+            sendRequest(clientSocket,
+                        &serverAddr,
+                        request);
+        }
+
+        else if (choice == 4)
+        {
+            sprintf(request,
+                    "%d|VIEW|ALL",
+                    requestId++);
+
+            sendRequest(clientSocket,
+                        &serverAddr,
+                        request);
+        }
+
+        else if (choice == 5)
+        {
+            printf("Client terminated.\n");
+            break;
+        }
+
+        else
+        {
+            printf("Invalid choice!\n");
+        }
+    }
+
+    closesocket(clientSocket);
+
+    WSACleanup();
+
+    return 0;
+}
