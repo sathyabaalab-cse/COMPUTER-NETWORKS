@@ -1,0 +1,61 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+
+#define PORT 8080
+#define MAC_LEN 18
+#define BUFFER_SIZE 1024
+
+int main() {
+    int sockfd;
+    struct sockaddr_in server_addr;
+    char target_mac[MAC_LEN];
+    char buffer[BUFFER_SIZE];
+    socklen_t addr_len = sizeof(server_addr);
+
+    // 1. Create UDP Socket
+    if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+        perror("Socket creation failed");
+        exit(EXIT_FAILURE);
+    }
+
+    // 2. Configure Server Address Details
+    memset(&server_addr, 0, sizeof(server_addr));
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(PORT);
+    server_addr.sin_addr.s_addr = inet_addr("127.0.0.1"); // Localhost loopback
+
+    printf("=== RARP Client Terminal ===\n");
+
+    while(1) {
+        printf("\nEnter Target MAC Address (format XX:XX:XX:XX:XX:XX) or type 'exit': ");
+        scanf("%s", target_mac);
+
+        if (strcasecmp(target_mac, "exit") == 0) {
+            break;
+        }
+
+        printf("[CLIENT] Sending RARP request broadcast for MAC: %s\n", target_mac);
+
+        // 3. Send MAC address packet to Server
+        sendto(sockfd, target_mac, strlen(target_mac) + 1, 0,
+               (const struct sockaddr *)&server_addr, addr_len);
+
+        printf("[CLIENT] Waiting for RARP Server reply...\n");
+
+        // 4. Receive IP response mapping from Server
+        memset(buffer, 0, BUFFER_SIZE);
+        int n = recvfrom(sockfd, buffer, BUFFER_SIZE, 0,
+                         (struct sockaddr *)&server_addr, &addr_len);
+        buffer[n] = '\0';
+
+        // 5. Output Result
+        printf("[SERVER REPLY] %s\n", buffer);
+    }
+
+    close(sockfd);
+    printf("Client disconnected.\n");
+    return 0;
+}
